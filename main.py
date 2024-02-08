@@ -1,8 +1,6 @@
 import os
 import cv2
-from cv2.gapi import RGB2Gray
 import numpy as np
-from numpy.compat import integer_types
 from photomosaic import photomosaic
 
 
