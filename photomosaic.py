@@ -1,10 +1,11 @@
 # implementation of the function `photomosaic`
 # you are not allowed to use any third-party libraries
 
-import timeit
-
-# create a empty dictionary to store the average color of each tile
-tile_dictionary = {}
+# class for storing the gray image and its brightness
+class GrayImage:
+    def __init__(self, image, brightness):
+        self.image = image
+        self.brightness = brightness
 
 # self-define function for math operation
 def max(a, b):
@@ -27,17 +28,6 @@ def ceil(a):
 
 def floor(a):
     return int(a)
-
-# self-define function to convert RGB to Gray
-def RGB2Gray(canvas):
-    # convert the canvas color to gary
-    result = []
-    for pixel in canvas:
-        temp = []
-        for i in range(len(pixel)):
-            temp.append(0.299 * pixel[i][0] + 0.587 * pixel[i][1] + 0.114 * pixel[i][2])
-        result.append(temp)
-    return result
 
 # bilinear interpolation for resizing the image from giving width and height
 def bilinear_interpolation(image, width, hight):
@@ -120,15 +110,131 @@ def bilinear_interpolation(image, width, hight):
         
     return result
 
+# For image, convert RGB to brightness and find average brightness process
+def image2brightness(canvas, width, hight) -> GrayImage:
+    # get the size of the tile
+    sizeOfTile = width * hight
+    
+    # total number of tiles
+    totalNumberOfTile = (len(canvas) * len(canvas[0])) / sizeOfTile
+    
+    # create an array to store the brightness of each tile
+    brightness = [0.0] * int(totalNumberOfTile)
+    
+    # number of tiles in a row
+    numOfTileInRow = int(len(canvas[0]) / width)
+
+    # convert the canvas color to gary
+    result = []
+    for y in range(len(canvas)):
+        temp = []
+        for x in range(len(canvas[y])):
+            # convert the RGB to brightness
+            pixel = 0.299 * canvas[y][x][0] + 0.587 * canvas[y][x][1] + 0.114 * canvas[y][x][2]
+            temp.append(pixel)
+            
+            # calculate the tile number
+            tileNumber = int(y / hight) * numOfTileInRow + int(x / width)
+            
+            # add the brightness to the tile
+            brightness[tileNumber] += pixel
+        result.append(temp)
+        
+    # calculate the average brightness
+    for i in range(len(brightness)):
+        brightness[i] = brightness[i] / sizeOfTile
+    
+    return GrayImage(result, brightness)
+ 
+# For each tile, convert RGB to brightness and find average brightness process
+def tile2brightness(tiles) -> GrayImage:
+    # convert the canvas color to gary
+    result = []
+    total_value = 0.0
+    for pixel in tiles:
+        temp = []
+        for i in range(len(pixel)):
+            temp.append(0.299 * pixel[i][0] + 0.587 * pixel[i][1] + 0.114 * pixel[i][2])
+            total_value += temp[i]
+        result.append(temp)
+        
+    # calculate the average brightness
+    average_brightness = total_value / (len(tiles) * len(tiles[0]))
+    
+    return GrayImage(result, average_brightness)
+
+# To find the nearest brightness tile for each tile
+def FindNearestTiles(brightness, tilePool) -> GrayImage.image:
+    # early leave for the edge case
+    if brightness >= tilePool[-1].brightness:
+        return tilePool[-1].image
+    elif brightness <= tilePool[0].brightness:
+        return tilePool[0].image
+    
+    # set the initial value for the binary search
+    left = 0
+    right = len(tilePool) - 1
+    
+    # binary search
+    while left < right:
+        mid = int((left + right) / 2)
+
+        # if the brightness of the tile is less than the target brightness, move the left pointer to the right
+        if tilePool[mid].brightness < brightness:
+            left = mid + 1
+        elif tilePool[mid].brightness > brightness:
+            right = mid - 1
+        elif tilePool[mid].brightness == brightness: # if found excetly the same brightness, return the image
+            return tilePool[left].image
+    
+    # Verify the result
+    # For example, if the pool like {1, 3, 4, 5}, key = 3.1, the current left pointer is 2
+    # however, it should be 1, so we need to check the left pointer and the left pointer - 1
+    # to find the nearest brightness tile
+    if tilePool[left].brightness - brightness < brightness - tilePool[left - 1].brightness:
+        return tilePool[left].image
+    else:
+        return tilePool[left-1].image
+
+# Compose the tiles to the canvas
+def ComposeTiles(canvas, tiles, width, hight) -> GrayImage.image:
+    result = []
+    numOfTileInRow = int(len(canvas[0]) / width)
+    for y in range(len(canvas)):
+        temp = []
+        for x in range(len(canvas[y])):
+            # calculate the tile number
+            tileNumber = int(y / hight) * numOfTileInRow + int(x / width)
+            
+            # find the nearest brightness tile
+            nearest_tile = FindNearestTiles(canvas[y][x], tiles)
+            
+            # append the tile to the result
+            temp.append(nearest_tile[y % hight][x % width])
+        result.append(temp)
+    return result
+
 def photomosaic(canvas, tiles, W, H, w, h):
     
-    start = timeit.default_timer()
     # resize the canvas to the target width and height
-    new_canvas = bilinear_interpolation(canvas, W, H)
-    stop = timeit.default_timer()
-    print('Time: ', stop - start)  
+    canvas = bilinear_interpolation(canvas, W, H)
     
     # resize the tiles to the target width and height
-    tiles[1] = bilinear_interpolation(tiles[1], w, h)
+    for i in range(len(tiles)):
+        tiles[i] = bilinear_interpolation(tiles[i], w, h)
+    
+    # convert the image to gray scale
+    new_canvas = image2brightness(canvas, w, h)
 
-    return new_canvas
+    # create a empty tile to store gray scale tiles
+    tile_brightness = []
+    
+    # convert the tiles to gray scale
+    for i in range(len(tiles)):
+        tile_brightness.append(tile2brightness(tiles[i]))
+
+    # Sort the tile_brightness array based on the brightness value
+    tile_brightness.sort(key=lambda x: x.brightness)
+
+    
+    return new_canvas.image
