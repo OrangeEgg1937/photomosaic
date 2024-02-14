@@ -4,7 +4,7 @@ import numpy as np
 from photomosaic import photomosaic
 
 
-canvas_path = './images/cat.bmp'
+canvas_path = './images/bandingTest.bmp'
 tile_dir = './tiles'
 W = H = 320
 w = h = 10

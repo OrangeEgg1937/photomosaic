@@ -144,6 +144,7 @@ def image2brightness(canvas, width, hight) -> GrayImage:
     for i in range(len(brightness)):
         brightness[i] = brightness[i] / sizeOfTile
     
+    # in image, the brightness is the average brightness of the canvas for each tile, not each pixel
     return GrayImage(result, brightness)
  
 # For each tile, convert RGB to brightness and find average brightness process
@@ -164,7 +165,7 @@ def tile2brightness(tiles) -> GrayImage:
     return GrayImage(result, average_brightness)
 
 # To find the nearest brightness tile for each tile
-def FindNearestTiles(brightness, tilePool) -> GrayImage.image:
+def FindNearestTiles(brightness, tilePool):
     # early leave for the edge case
     if brightness >= tilePool[-1].brightness:
         return tilePool[-1].image
@@ -197,22 +198,28 @@ def FindNearestTiles(brightness, tilePool) -> GrayImage.image:
         return tilePool[left-1].image
 
 # Compose the tiles to the canvas
-def ComposeTiles(canvas, tiles, width, hight) -> GrayImage.image:
-    result = []
-    numOfTileInRow = int(len(canvas[0]) / width)
-    for y in range(len(canvas)):
-        temp = []
-        for x in range(len(canvas[y])):
-            # calculate the tile number
-            tileNumber = int(y / hight) * numOfTileInRow + int(x / width)
-            
-            # find the nearest brightness tile
-            nearest_tile = FindNearestTiles(canvas[y][x], tiles)
-            
-            # append the tile to the result
-            temp.append(nearest_tile[y % hight][x % width])
-        result.append(temp)
-    return result
+def ComposeTiles(canvas:GrayImage, tiles, width, hight):
+    # get the number of tiles in a row and a column
+    numberOfTileInRow = int(len(canvas.image[0]) / width)
+    numberOfTileInCol = int(len(canvas.image) / hight)
+    
+    # for every tile, find the nearest brightness tile and compose it to the canvas
+    for i in range(len(canvas.brightness)):
+        
+        # find the nearest brightness tile
+        nearest_tile = FindNearestTiles(canvas.brightness[i], tiles)
+        
+        # compose the tile to the canvas
+        for y in range(hight):
+            for x in range(width):
+                # map the tile index to the canvas
+                iy = int(i / numberOfTileInCol) * hight + y
+                ix = (i % numberOfTileInRow) * width + x
+                
+                # compose the tile to the canvas
+                canvas.image[iy][ix] = nearest_tile[y][x]
+   
+    return canvas
 
 def photomosaic(canvas, tiles, W, H, w, h):
     
@@ -224,7 +231,7 @@ def photomosaic(canvas, tiles, W, H, w, h):
         tiles[i] = bilinear_interpolation(tiles[i], w, h)
     
     # convert the image to gray scale
-    new_canvas = image2brightness(canvas, w, h)
+    gray_canvas = image2brightness(canvas, w, h)
 
     # create a empty tile to store gray scale tiles
     tile_brightness = []
@@ -236,5 +243,7 @@ def photomosaic(canvas, tiles, W, H, w, h):
     # Sort the tile_brightness array based on the brightness value
     tile_brightness.sort(key=lambda x: x.brightness)
 
-    
-    return new_canvas.image
+    # compose the result image
+    gray_canvas = ComposeTiles(gray_canvas, tile_brightness, w, h)
+
+    return gray_canvas.image
