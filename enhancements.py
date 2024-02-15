@@ -1,9 +1,9 @@
 # implementation of the function `photomosaic`
 # you are not allowed to use any third-party libraries
-import timeit # for program runtime testing
+# import timeit # for program runtime testing
 
 # class for storing the gray image and its brightness
-class GrayImage:
+class GrayImage:  
     def __init__(self, image, brightness):
         self.image = image
         self.brightness = brightness
@@ -274,6 +274,67 @@ def tile2brightness(tiles) -> GrayImage:
     
     return GrayImage(result, average_brightness)
 
+# creating a Bayer matrix for dithering
+def BayerMatrix(n):
+    # define the base case 2x2 matrix
+    base = [[0, 2], 
+            [3, 1]]
+    
+    while n > 2:
+        # create a new matrix with 4 times the size of the original matrix
+        new_base = []
+        for i in range(2 * len(base)):
+            temp = []
+            for j in range(2 * len(base)):
+                temp.append(0)
+            new_base.append(temp)
+        
+        # copy the original matrix to the new matrix
+        for i in range(len(base)):
+            for j in range(len(base)):
+                new_base[i][j] = 4 * base[i][j]
+                new_base[i][j + len(base)] = 4 * base[i][j] + 2
+                new_base[i + len(base)][j] = 4 * base[i][j] + 3
+                new_base[i + len(base)][j + len(base)] = 4 * base[i][j] + 1
+        
+        # update the base matrix
+        base = new_base
+        n = n / 2
+    
+    return base
+
+# Dithering process
+def Dithering(canvas:GrayImage, bayerSize):
+    # get the original width and height
+    h = len(canvas.image)
+    w = len(canvas.image[0])
+    
+    # create a new image array
+    result = []
+    
+    # create a Bayer matrix for dithering
+    bayer = BayerMatrix(bayerSize)
+    
+    # dithering process
+    for y in range(h):
+        temp = []
+        for x in range(w):
+            # get the pixel value
+            pixel = canvas.image[y][x]
+            
+            # get the threshold value
+            threshold = bayer[y % bayerSize][x % bayerSize]
+            
+            # compare the pixel value with the threshold value
+            if pixel > threshold:
+                temp.append(255)
+            else:
+                temp.append(0)
+        result.append(temp)
+        
+    return result
+
+
 # To find the nearest brightness tile for each tile
 def FindNearestTiles(brightness, tilePool):
     # early leave for the edge case
@@ -331,6 +392,37 @@ def ComposeTiles(canvas:GrayImage, tiles, width, hight):
    
     return canvas
 
+# calculate the average brightness of the image
+def average_brightness4image(image, width, hight):
+    # get the size of the tile
+    sizeOfTile = width * hight
+    
+    # total number of tiles
+    totalNumberOfTile = (len(image) * len(image[0])) / sizeOfTile
+
+    # create an array to store the brightness of each tile
+    brightness = [0.0] * int(totalNumberOfTile)
+    
+    # number of tiles in a row
+    numOfTileInRow = int(len(image[0]) / width)
+    
+    # get the color of the current image
+    for y in range(len(image)):
+        for x in range(len(image[y])):
+            # calculate the tile number
+            tileNumber = int(y / hight) * numOfTileInRow + int(x / width)
+            
+            # add the brightness to the tile
+            brightness[tileNumber] += image[y][x]
+            
+    # calculate the average brightness
+    for i in range(len(brightness)):
+        brightness[i] = brightness[i] / sizeOfTile
+    
+    # return the average brightness
+    return brightness
+
+# enhancement function for photomosaic
 def photomosaic_Cubic(canvas, tiles, W, H, w, h):
     # resize the canvas to the target width and height
     canvas = cubic_interpolation(canvas, W, H)
@@ -354,4 +446,44 @@ def photomosaic_Cubic(canvas, tiles, W, H, w, h):
 
     # compose the result image
     gray_canvas = ComposeTiles(gray_canvas, tile_brightness, w, h)
+    return gray_canvas.image
+
+def photomosaic_dithering_bilinear(canvas, tiles, W, H, w, h, size):
+
+    # resize the canvas to the target width and height
+    canvas = bilinear_interpolation(canvas, W, H)
+    
+    # resize the tiles to the target width and height
+    for i in range(len(tiles)):
+        tiles[i] = bilinear_interpolation(tiles[i], w, h)
+    
+    # convert the image to gray scale
+    gray_canvas = image2brightness(canvas, w, h)
+
+    # dithering process
+    gray_canvas.image = Dithering(gray_canvas, size)
+    
+    # recaluclate the brightness of the dithering result
+    gray_canvas.brightness = average_brightness4image(gray_canvas.image, w, h)
+    
+    # create a empty tile to store gray scale tiles
+    tile_brightness = []
+    
+    # convert the tiles to gray scale
+    for i in range(len(tiles)):
+        tile_brightness.append(tile2brightness(tiles[i]))
+    
+    # Sort the tile_brightness array based on the brightness value
+    tile_brightness.sort(key=lambda x: x.brightness)
+
+    # compose the result image
+    gray_canvas = ComposeTiles(gray_canvas, tile_brightness, w, h)
+
+    return gray_canvas.image
+
+def ditheringOnly(canvas, size):
+    # convert the image to gray scale
+    gray_canvas = image2brightness(canvas, 1, 1)
+    # dithering process
+    gray_canvas.image = Dithering(gray_canvas, size)
     return gray_canvas.image
