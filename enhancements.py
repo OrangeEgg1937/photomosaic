@@ -1,6 +1,6 @@
 # implementation of the function `photomosaic`
 # you are not allowed to use any third-party libraries
-# import timeit # for program runtime testing
+import timeit # for program runtime testing
 
 # class for storing the gray image and its brightness
 class GrayImage:
@@ -29,6 +29,115 @@ def ceil(a):
 
 def floor(a):
     return int(a)
+
+# replicate padding for the image
+def replicate_padding(image):
+    # get the original width and height
+    h = len(image)
+    w = len(image[0])
+    
+    # create a new image array
+    padded_image = []
+    
+    # replicate padding
+    for i in range(h + 4):
+        temp = []
+        for j in range(w + 4):
+            # replicate padding
+            if i < 2: # top
+                y = 0
+            elif i >= h + 2: # bottom
+                y = h - 1
+            else:
+                y = i - 2 # middle (copying the original img)
+                
+            if j < 2: # left
+                x = 0
+            elif j >= w + 2: # right
+                x = w - 1
+            else:
+                x = j - 2 # middle (copying the original img)
+            
+            temp.append(image[y][x]) # copy the pixel value
+        padded_image.append(temp) # append the new row to the result
+        
+    return padded_image
+
+# bicubic kernel equation
+def cubic_kernel(distance, a:float):
+    distance = abs(distance)
+    if distance <= 1:
+        return (a + 2) * (distance ** 3) - (a + 3) * (distance ** 2) + 1
+    elif distance < 2:
+        return a * (distance ** 3) - 5 * a * (distance ** 2) + 8 * a * distance - 4 * a
+    else:
+        return 0
+
+# bilinear interpolation for resizing the image from giving width and height
+def cubic_interpolation(image, width, hight):
+    # get the original width and height
+    original_h = len(image)
+    original_w = len(image[0])
+    
+    # get the ratio of the original image and the target image
+    width_ratio = original_w / (width)
+    hight_ratio = original_h / (hight)
+
+    # create a new image array
+    result = []
+    
+    # padding the image
+    image = replicate_padding(image)
+    
+    # bicubic interpolation part
+    #     dx
+    #   |---------|
+    #   |--||-------------------------|
+    # dy|  ||p0    p1     p2     p3   | y0
+    #   |  ||p4    p5     p6     p7   | y1
+    #   |--||         R(x, y)         |
+    #      |p8    p9     p10    p11   | y2
+    #      |p12   p13    p14    p15   | y3
+    #      |------------------------- |
+    #        x0       x1     x2     x3
+    for h in range(hight):
+        temp = []
+        for w in range(width):
+            # map the output coordinates to the mapped image
+            x = (w + 0.5) * width_ratio + 1.5
+            y = (h + 0.5) * hight_ratio + 1.5
+            
+            # get the x and y coordinate of the 16 points
+            dx = []
+            dx.append(int(x - 1))
+            dx.append(int(x))
+            dx.append(int(x + 1))
+            dx.append(int(x + 2))
+            
+            dy = []
+            dy.append(int(y - 1))
+            dy.append(int(y))
+            dy.append(int(y + 1))
+            dy.append(int(y + 2))
+            
+            # find the weight of the 16 points
+            w = []
+            for i in range(4):
+                for j in range(4):
+                    w.append(cubic_kernel(x - dx[i], -0.75) * cubic_kernel(y - dy[j], -0.75))
+            
+            # calculate the pixel value
+            final_pixel = 0.0
+            for i in range(4):
+                for j in range(4):
+                    final_pixel += w[i * 4 + j] * image[dy[j]][dx[i]]
+                    
+            # append the result to the new image
+            temp.append(final_pixel)
+        result.append(temp)
+    
+        
+    return result
 
 # bilinear interpolation for resizing the image from giving width and height
 def bilinear_interpolation(image, width, hight):
@@ -222,14 +331,13 @@ def ComposeTiles(canvas:GrayImage, tiles, width, hight):
    
     return canvas
 
-def photomosaic(canvas, tiles, W, H, w, h):
-
+def photomosaic_Cubic(canvas, tiles, W, H, w, h):
     # resize the canvas to the target width and height
-    canvas = bilinear_interpolation(canvas, W, H)
+    canvas = cubic_interpolation(canvas, W, H)
     
     # resize the tiles to the target width and height
     for i in range(len(tiles)):
-        tiles[i] = bilinear_interpolation(tiles[i], w, h)
+        tiles[i] = cubic_interpolation(tiles[i], w, h)
     
     # convert the image to gray scale
     gray_canvas = image2brightness(canvas, w, h)
@@ -246,5 +354,4 @@ def photomosaic(canvas, tiles, W, H, w, h):
 
     # compose the result image
     gray_canvas = ComposeTiles(gray_canvas, tile_brightness, w, h)
-
     return gray_canvas.image
